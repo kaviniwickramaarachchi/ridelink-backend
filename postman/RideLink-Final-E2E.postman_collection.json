@@ -1,0 +1,1053 @@
+﻿{
+    "info":  {
+                 "name":  "RideLink - Final E2E",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+                 "description":  "Final integrated RideLink E2E collection for Account, Driver \u0026 Vehicle, Ride Management, and Fare \u0026 Payment services. Run services with the same JWT_SECRET and INTERNAL_API_KEY values before executing. Ride creation itself triggers Ride -\u003e Fare estimate and Ride -\u003e Driver lookup/reservation; this collection does not manually call internal fare estimate during ride creation. Optional manual negative demo: stop or misconfigure Fare Service, then run Passenger Create Ride to observe Ride Service returning 503.\n\nDemo precondition: Before running the full E2E demo, ensure the selected service area has exactly one eligible AVAILABLE driver: the fresh driver created by this collection. If older demo drivers are still AVAILABLE in the same service area, Ride Service may correctly assign one of them instead. Use the non-mutating precondition request in Driver Setup to verify this state. If it fails, mark old demo drivers UNAVAILABLE through existing Driver APIs before rerunning; do not delete data."
+             },
+    "item":  [
+                 {
+                     "name":  "01 - Account Setup",
+                     "item":  [
+                                  {
+                                      "name":  "01. Register Passenger",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const stamp = Date.now();",
+                                                                                    "pm.environment.set(\u0027passengerEmail\u0027, `passenger.${stamp}@example.com`);",
+                                                                                    "if (!pm.environment.get(\u0027passengerPassword\u0027)) {",
+                                                                                    "  pm.environment.set(\u0027passengerPassword\u0027, `DemoPass${stamp}!`);",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 201 Created\u0027, () =\u003e pm.response.to.have.status(201));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Passenger id exists\u0027, () =\u003e pm.expect(body.id).to.exist);",
+                                                                                    "pm.test(\u0027Passenger role returned\u0027, () =\u003e pm.expect(body.role).to.eql(\u0027PASSENGER\u0027));",
+                                                                                    "pm.test(\u0027Password hash is not exposed\u0027, () =\u003e pm.expect(body).not.to.have.property(\u0027passwordHash\u0027));",
+                                                                                    "pm.environment.set(\u0027passengerId\u0027, String(body.id));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Demo Passenger\",\n  \"email\": \"{{passengerEmail}}\",\n  \"password\": \"{{passengerPassword}}\",\n  \"phoneNumber\": \"0771234567\",\n  \"role\": \"PASSENGER\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{accountBaseUrl}}/api/v1/auth/register"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "02. Login Passenger",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Passenger token exists\u0027, () =\u003e pm.expect(body.accessToken).to.be.a(\u0027string\u0027).and.not.empty);",
+                                                                                    "pm.test(\u0027Passenger user id matches registration\u0027, () =\u003e pm.expect(String(body.user.id)).to.eql(pm.environment.get(\u0027passengerId\u0027)));",
+                                                                                    "pm.environment.set(\u0027passengerToken\u0027, body.accessToken);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{passengerEmail}}\",\n  \"password\": \"{{passengerPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{accountBaseUrl}}/api/v1/auth/login"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "03. Register Driver",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const stamp = Date.now();",
+                                                                                    "pm.environment.set(\u0027driverEmail\u0027, `driver.${stamp}@example.com`);",
+                                                                                    "if (!pm.environment.get(\u0027driverPassword\u0027)) {",
+                                                                                    "  pm.environment.set(\u0027driverPassword\u0027, `DemoPass${stamp}!`);",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 201 Created\u0027, () =\u003e pm.response.to.have.status(201));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Driver account id exists\u0027, () =\u003e pm.expect(body.id).to.exist);",
+                                                                                    "pm.test(\u0027Driver role returned\u0027, () =\u003e pm.expect(body.role).to.eql(\u0027DRIVER\u0027));",
+                                                                                    "pm.test(\u0027Password hash is not exposed\u0027, () =\u003e pm.expect(body).not.to.have.property(\u0027passwordHash\u0027));",
+                                                                                    "pm.environment.set(\u0027driverAccountId\u0027, String(body.id));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Demo Driver\",\n  \"email\": \"{{driverEmail}}\",\n  \"password\": \"{{driverPassword}}\",\n  \"phoneNumber\": \"0777654321\",\n  \"role\": \"DRIVER\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{accountBaseUrl}}/api/v1/auth/register"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "04. Login Driver",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Driver token exists\u0027, () =\u003e pm.expect(body.accessToken).to.be.a(\u0027string\u0027).and.not.empty);",
+                                                                                    "pm.test(\u0027Driver account id matches registration\u0027, () =\u003e pm.expect(String(body.user.id)).to.eql(pm.environment.get(\u0027driverAccountId\u0027)));",
+                                                                                    "pm.environment.set(\u0027driverToken\u0027, body.accessToken);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{driverEmail}}\",\n  \"password\": \"{{driverPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{accountBaseUrl}}/api/v1/auth/login"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "02 - Driver Setup",
+                     "item":  [
+                                  {
+                                      "name":  "05. Create Driver Profile",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 201 Created\u0027, () =\u003e pm.response.to.have.status(201));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Driver profile id exists\u0027, () =\u003e pm.expect(body.id).to.exist);",
+                                                                                    "pm.test(\u0027Driver profile account matches driver account\u0027, () =\u003e pm.expect(String(body.accountId)).to.eql(pm.environment.get(\u0027driverAccountId\u0027)));",
+                                                                                    "pm.environment.set(\u0027driverId\u0027, String(body.id));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{driverBaseUrl}}/api/v1/drivers/profile"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "06. Update Driver Service Area and Location",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Service area configured\u0027, () =\u003e pm.expect(body.serviceArea).to.eql(pm.environment.get(\u0027serviceArea\u0027)));",
+                                                                                    "pm.test(\u0027Driver location configured\u0027, () =\u003e {",
+                                                                                    "  pm.expect(Number(body.currentLatitude)).to.eql(Number(pm.environment.get(\u0027pickupLatitude\u0027)));",
+                                                                                    "  pm.expect(Number(body.currentLongitude)).to.eql(Number(pm.environment.get(\u0027pickupLongitude\u0027)));",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"serviceArea\": \"{{serviceArea}}\",\n  \"currentLatitude\": {{pickupLatitude}},\n  \"currentLongitude\": {{pickupLongitude}}\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{driverBaseUrl}}/api/v1/drivers/me"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "07. Add Driver Vehicle",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.variables.set(\u0027vehicleRegistrationNumber\u0027, `RL-${Date.now()}`);"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 201 Created\u0027, () =\u003e pm.response.to.have.status(201));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Vehicle id exists\u0027, () =\u003e pm.expect(body.id).to.exist);",
+                                                                                    "pm.test(\u0027Vehicle belongs to driver\u0027, () =\u003e pm.expect(String(body.driverId)).to.eql(pm.environment.get(\u0027driverId\u0027)));",
+                                                                                    "pm.test(\u0027Vehicle is active\u0027, () =\u003e pm.expect(body.vehicleStatus).to.eql(\u0027ACTIVE\u0027));",
+                                                                                    "pm.environment.set(\u0027vehicleId\u0027, String(body.id));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"registrationNumber\": \"{{vehicleRegistrationNumber}}\",\n  \"make\": \"Toyota\",\n  \"model\": \"Aqua\",\n  \"vehicleType\": \"CAR\",\n  \"colour\": \"White\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{driverBaseUrl}}/api/v1/drivers/me/vehicles"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "08. Set Driver AVAILABLE",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Driver is AVAILABLE\u0027, () =\u003e pm.expect(body.availabilityStatus).to.eql(\u0027AVAILABLE\u0027));",
+                                                                                    "pm.test(\u0027Driver remains in expected service area\u0027, () =\u003e pm.expect(body.serviceArea).to.eql(pm.environment.get(\u0027serviceArea\u0027)));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"availabilityStatus\": \"AVAILABLE\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{driverBaseUrl}}/api/v1/drivers/me/availability"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "08A. Verify Fresh Driver Is Only Eligible",
+                                      "description":  "Read-only demo precondition. This confirms the fresh driver created by this collection is the only eligible AVAILABLE driver for the configured serviceArea. If this fails, an older eligible demo driver may be assigned instead of the fresh driver; mark older demo drivers UNAVAILABLE through existing Driver APIs before the final run.",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "const expectedDriverId = pm.environment.get(\u0027driverId\u0027);",
+                                                                                    "const eligibleIds = body.map(driver =\u003e String(driver.driverId));",
+                                                                                    "pm.test(\u0027Fresh driver is the only eligible driver for service area\u0027, () =\u003e {",
+                                                                                    "  pm.expect(eligibleIds).to.eql([expectedDriverId]);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "X-Internal-Api-Key",
+                                                                         "value":  "{{internalApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{driverBaseUrl}}/internal/drivers/eligible?serviceArea={{serviceArea}}"
+                                                  }
+                                  }
+                              ],
+                     "description":  "Before running the full E2E demo, ensure the selected service area has exactly one eligible AVAILABLE driver: the fresh driver created by this collection. If older demo drivers are still AVAILABLE in the same service area, Ride Service may correctly assign one of them instead. Use the non-mutating precondition request in Driver Setup to verify this state. If it fails, mark old demo drivers UNAVAILABLE through existing Driver APIs before rerunning; do not delete data."
+                 },
+                 {
+                     "name":  "03 - Fare Estimate",
+                     "item":  [
+                                  {
+                                      "name":  "09. Passenger Fare Estimate",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Estimated distance exists\u0027, () =\u003e pm.expect(body.distanceKm).to.be.a(\u0027number\u0027));",
+                                                                                    "pm.test(\u0027Estimated fare exists\u0027, () =\u003e pm.expect(body.estimatedFare).to.be.a(\u0027number\u0027));",
+                                                                                    "pm.environment.set(\u0027estimatedDistanceKm\u0027, String(body.distanceKm));",
+                                                                                    "pm.environment.set(\u0027estimatedFare\u0027, String(body.estimatedFare));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{passengerToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"pickupLatitude\": {{pickupLatitude}},\n  \"pickupLongitude\": {{pickupLongitude}},\n  \"destinationLatitude\": {{destinationLatitude}},\n  \"destinationLongitude\": {{destinationLongitude}}\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{fareBaseUrl}}/api/fares/estimate"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "04 - Ride Lifecycle",
+                     "item":  [
+                                  {
+                                      "name":  "10. Passenger Create Ride",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 201 Created\u0027, () =\u003e pm.response.to.have.status(201));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Ride id exists\u0027, () =\u003e pm.expect(body.id).to.exist);",
+                                                                                    "pm.test(\u0027Ride is assigned when eligible driver exists\u0027, () =\u003e pm.expect(body.status).to.eql(\u0027ASSIGNED\u0027));",
+                                                                                    "pm.test(\u0027Assigned driver matches expected driver\u0027, () =\u003e pm.expect(String(body.driverId)).to.eql(pm.environment.get(\u0027driverId\u0027)));",
+                                                                                    "pm.environment.set(\u0027rideId\u0027, String(body.id));",
+                                                                                    "pm.environment.set(\u0027assignedDriverId\u0027, String(body.driverId));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{passengerToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"serviceArea\": \"{{serviceArea}}\",\n  \"pickup\": {\n    \"placeName\": \"Colombo Fort\",\n    \"latitude\": {{pickupLatitude}},\n    \"longitude\": {{pickupLongitude}}\n  },\n  \"destination\": {\n    \"placeName\": \"Bambalapitiya\",\n    \"latitude\": {{destinationLatitude}},\n    \"longitude\": {{destinationLongitude}}\n  }\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{rideBaseUrl}}/api/v1/rides"
+                                                  },
+                                      "description":  "Requires the Driver Setup precondition to pass: the fresh driverId stored in the environment must be the only eligible AVAILABLE driver for the configured serviceArea. The assertion intentionally remains strict so assignment drift is caught before the demo continues."
+                                  },
+                                  {
+                                      "name":  "11. Driver Get Assigned Ride",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Ride id matches\u0027, () =\u003e pm.expect(String(body.id)).to.eql(pm.environment.get(\u0027rideId\u0027)));",
+                                                                                    "pm.test(\u0027Driver owns assigned ride view\u0027, () =\u003e pm.expect(String(body.driverId)).to.eql(pm.environment.get(\u0027driverId\u0027)));",
+                                                                                    "pm.test(\u0027Ride is ASSIGNED\u0027, () =\u003e pm.expect(body.status).to.eql(\u0027ASSIGNED\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{rideBaseUrl}}/api/v1/rides/driver/{{rideId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "12. Driver Accept Ride",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Ride is ACCEPTED\u0027, () =\u003e pm.expect(body.status).to.eql(\u0027ACCEPTED\u0027));",
+                                                                                    "pm.test(\u0027Accepted ride id matches\u0027, () =\u003e pm.expect(String(body.id)).to.eql(pm.environment.get(\u0027rideId\u0027)));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "PATCH",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/accept"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "13. Driver Start Ride",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Ride is IN_PROGRESS\u0027, () =\u003e pm.expect(body.status).to.eql(\u0027IN_PROGRESS\u0027));",
+                                                                                    "pm.test(\u0027Start timestamp exists\u0027, () =\u003e pm.expect(body.startedAt).to.be.a(\u0027string\u0027).and.not.empty);",
+                                                                                    "pm.environment.set(\u0027startedAt\u0027, body.startedAt);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "PATCH",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/start"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "14. Driver Complete Ride",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Ride is COMPLETED\u0027, () =\u003e pm.expect(body.status).to.eql(\u0027COMPLETED\u0027));",
+                                                                                    "pm.test(\u0027Completed timestamp exists\u0027, () =\u003e pm.expect(body.completedAt).to.be.a(\u0027string\u0027).and.not.empty);",
+                                                                                    "pm.test(\u0027Actual distance matches demo value\u0027, () =\u003e pm.expect(Number(body.actualDistance)).to.eql(Number(pm.environment.get(\u0027actualDistance\u0027))));",
+                                                                                    "pm.environment.set(\u0027completedAt\u0027, body.completedAt);",
+                                                                                    "pm.environment.set(\u0027actualDistance\u0027, String(body.actualDistance));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "PATCH",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"actualDistance\": {{actualDistance}}\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/complete"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "05 - Fare Payment and Receipt",
+                     "item":  [
+                                  {
+                                      "name":  "15. Verify Final Fare Idempotently",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "prerequest",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const startedAt = pm.environment.get(\u0027startedAt\u0027);",
+                                                                                    "const completedAt = pm.environment.get(\u0027completedAt\u0027);",
+                                                                                    "pm.test(\u0027Ride timestamps are available for final fare verification\u0027, () =\u003e {",
+                                                                                    "  pm.expect(startedAt, \u0027startedAt\u0027).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "  pm.expect(completedAt, \u0027completedAt\u0027).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "});",
+                                                                                    "const startedMs = Date.parse(startedAt);",
+                                                                                    "const completedMs = Date.parse(completedAt);",
+                                                                                    "const durationMinutes = Math.floor((completedMs - startedMs) / 1000) / 60;",
+                                                                                    "pm.environment.set(\u0027durationMinutes\u0027, String(durationMinutes));"
+                                                                                ]
+                                                                   }
+                                                    },
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Final fare ride id matches\u0027, () =\u003e pm.expect(String(body.rideId)).to.eql(pm.environment.get(\u0027rideId\u0027)));",
+                                                                                    "pm.test(\u0027Final fare distance matches actual distance\u0027, () =\u003e pm.expect(Number(body.distanceKm)).to.eql(Number(pm.environment.get(\u0027actualDistance\u0027))));",
+                                                                                    "pm.test(\u0027Final fare amount exists\u0027, () =\u003e pm.expect(body.amount).to.be.a(\u0027number\u0027));",
+                                                                                    "pm.environment.set(\u0027finalFareAmount\u0027, String(body.amount));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Internal-Api-Key",
+                                                                         "value":  "{{internalApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"rideId\": {{rideId}},\n  \"passengerId\": {{passengerId}},\n  \"distanceKm\": {{actualDistance}},\n  \"durationMinutes\": {{durationMinutes}}\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{fareBaseUrl}}/internal/fares/final"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "16. Passenger Record Payment",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Payment id exists\u0027, () =\u003e pm.expect(body.id).to.exist);",
+                                                                                    "pm.test(\u0027Payment is SUCCESS\u0027, () =\u003e pm.expect(body.status).to.eql(\u0027SUCCESS\u0027));",
+                                                                                    "pm.test(\u0027Payment ride id matches\u0027, () =\u003e pm.expect(String(body.rideId)).to.eql(pm.environment.get(\u0027rideId\u0027)));",
+                                                                                    "pm.test(\u0027Payment amount equals final fare amount\u0027, () =\u003e pm.expect(Number(body.amount)).to.eql(Number(pm.environment.get(\u0027finalFareAmount\u0027))));",
+                                                                                    "pm.environment.set(\u0027paymentId\u0027, String(body.id));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{passengerToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"rideId\": {{rideId}},\n  \"method\": \"CARD\",\n  \"cardToken\": \"tok_demo_success\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{fareBaseUrl}}/api/payments"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "17. Passenger Get Payment",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Payment id matches\u0027, () =\u003e pm.expect(String(body.id)).to.eql(pm.environment.get(\u0027paymentId\u0027)));",
+                                                                                    "pm.test(\u0027Payment belongs to passenger\u0027, () =\u003e pm.expect(String(body.passengerId)).to.eql(pm.environment.get(\u0027passengerId\u0027)));",
+                                                                                    "pm.test(\u0027Payment remains SUCCESS\u0027, () =\u003e pm.expect(body.status).to.eql(\u0027SUCCESS\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{passengerToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{fareBaseUrl}}/api/payments/{{paymentId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "18. Passenger Get Receipt",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 200 OK\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "const body = pm.response.json();",
+                                                                                    "pm.test(\u0027Receipt id exists\u0027, () =\u003e pm.expect(body.id).to.exist);",
+                                                                                    "pm.test(\u0027Receipt belongs to payment\u0027, () =\u003e pm.expect(String(body.paymentId)).to.eql(pm.environment.get(\u0027paymentId\u0027)));",
+                                                                                    "pm.test(\u0027Receipt number exists\u0027, () =\u003e pm.expect(body.receiptNumber).to.be.a(\u0027string\u0027).and.not.empty);",
+                                                                                    "pm.environment.set(\u0027receiptId\u0027, String(body.id));",
+                                                                                    "pm.environment.set(\u0027receiptNumber\u0027, body.receiptNumber);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{passengerToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{fareBaseUrl}}/api/receipts/payment/{{paymentId}}"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "06 - Negative Tests",
+                     "item":  [
+                                  {
+                                      "name":  "A. Ride List Without JWT -\u003e 401",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 401 Unauthorized\u0027, () =\u003e pm.response.to.have.status(401));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{rideBaseUrl}}/api/v1/rides"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "B. Passenger Attempts Driver Profile Creation -\u003e 403",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 403 Forbidden\u0027, () =\u003e pm.response.to.have.status(403));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{passengerToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{driverBaseUrl}}/api/v1/drivers/profile"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "C. Invalid Ride Lifecycle After Completion -\u003e 409",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 409 Conflict\u0027, () =\u003e pm.response.to.have.status(409));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{driverToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "PATCH",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  "{{rideBaseUrl}}/api/v1/rides/{{rideId}}/accept"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "D. Duplicate Successful Payment -\u003e 409",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 409 Conflict\u0027, () =\u003e pm.response.to.have.status(409));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "bearer",
+                                                                   "bearer":  [
+                                                                                  {
+                                                                                      "key":  "token",
+                                                                                      "value":  "{{passengerToken}}",
+                                                                                      "type":  "string"
+                                                                                  }
+                                                                              ]
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"rideId\": {{rideId}},\n  \"method\": \"CARD\",\n  \"cardToken\": \"tok_demo_success_again\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{fareBaseUrl}}/api/payments"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "E. Fare Internal Estimate With Invalid Internal API Key -\u003e 401",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027HTTP 401 Unauthorized\u0027, () =\u003e pm.response.to.have.status(401));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Internal-Api-Key",
+                                                                         "value":  "invalid-demo-key"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"pickupLatitude\": {{pickupLatitude}},\n  \"pickupLongitude\": {{pickupLongitude}},\n  \"destinationLatitude\": {{destinationLatitude}},\n  \"destinationLongitude\": {{destinationLongitude}}\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  "{{fareBaseUrl}}/internal/fares/estimate"
+                                                  }
+                                  }
+                              ]
+                 }
+             ]
+}
